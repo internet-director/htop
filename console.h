@@ -23,30 +23,28 @@ namespace htop {
 	};
 
 	class console {
-		bool final{ false };
 	public:
-		console(bool funal = false): final{final} {}
+		console() = default;
 		~console();
 		void clear() const;
 		console& operator <<(const wchar_t* str) const;
 		console& operator <<(const std::wstring& str) const;
-		console& operator <<(console& (*color)(const wchar_t*)) const;
+		console& operator <<(console& (*color)()) const;
 		static void SetColor(ConsoleColor text, ConsoleColor background);
 	};
 
-	htop::console& endl(const wchar_t* str);
-	htop::console& start(const wchar_t* str);
-	htop::console& red(const wchar_t* str);
-	htop::console& blue(const wchar_t* str);
-	htop::console& mgent(const wchar_t* str);
-	htop::console& lmgent(const wchar_t* str);
-	htop::console& green(const wchar_t* str);
-	htop::console& lblue(const wchar_t* str);
-	htop::console& lgreen(const wchar_t* str);
-	htop::console& white(const wchar_t* str);
-	htop::console& lgray(const wchar_t* str);
-	htop::console& background_red(const wchar_t* str);
+	htop::console& endl();
+	htop::console& start();
+	htop::console& red();
+	htop::console& blue();
+	htop::console& mgent();
+	htop::console& lmgent();
+	htop::console& green();
+	htop::console& lblue();
+	htop::console& lgreen();
+	htop::console& white();
+	htop::console& lgray();
+	htop::console& background_red();
 
-
-	static htop::console cout(true);
+	static htop::console cout;
 }

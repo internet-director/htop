@@ -27,9 +27,9 @@ htop::console& htop::console::operator<<(const std::wstring& str) const
 	return htop::console{};
 }
 
-htop::console& htop::console::operator<<(console& (*color)(const wchar_t*)) const
+htop::console& htop::console::operator<<(console& (*color)()) const
 {
-	color(nullptr);
+	color();
 	return htop::console{};
 }
 
@@ -48,75 +48,74 @@ void htop::console::SetColor(ConsoleColor text, ConsoleColor background)
 	SetConsoleTextAttribute(hStdOut, (WORD)((background << 4) | text));
 }
 
-htop::console& htop::endl(const wchar_t* str)
+htop::console& htop::endl()
 {
 	return htop::console() << L"\r\n";
 }
 
-htop::console& htop::start(const wchar_t* str)
+htop::console& htop::start()
 {
-	COORD coord{ 0, 0 };
+	COORD coord{ 0, 1 };
 	HANDLE hStdOut = GetStdHandle(STD_OUTPUT_HANDLE);
 	SetConsoleCursorPosition(hStdOut, coord);
 	return htop::console();
 }
 
-
-htop::console& htop::red(const wchar_t* str)
+htop::console& htop::red()
 {
 	htop::console::SetColor(Red, None);
 	return htop::console();
 }
 
-htop::console& htop::blue(const wchar_t* str)
+htop::console& htop::blue()
 {
 	htop::console::SetColor(Blue, None);
 	return htop::console();
 }
 
-htop::console& htop::green(const wchar_t* str)
+htop::console& htop::green()
 {
 	htop::console::SetColor(Green, None);
 	return htop::console();
 }
 
-htop::console& htop::mgent(const wchar_t* str)
+htop::console& htop::mgent()
 {
 	htop::console::SetColor(Magenta, None);
 	return htop::console();
 }
 
-htop::console& htop::lblue(const wchar_t* str)
+htop::console& htop::lblue()
 {
 	htop::console::SetColor(LightBlue, None);
 	return htop::console();
 }
 
-htop::console& htop::lgreen(const wchar_t* str)
+htop::console& htop::lgreen()
 {
 	htop::console::SetColor(LightGreen, None);
 	return htop::console();
 }
 
-htop::console& htop::lmgent(const wchar_t* str)
+htop::console& htop::lmgent()
 {
 	htop::console::SetColor(LightMagenta, None);
 	return htop::console();
 }
 
-htop::console& htop::white(const wchar_t* str)
+htop::console& htop::white()
 {
 	htop::console::SetColor(White, None);
 	return htop::console();
 }
 
-htop::console& htop::lgray(const wchar_t* str)
+htop::console& htop::lgray()
 {
 	htop::console::SetColor(LightGray, None);
 	return htop::console();
 }
 
-htop::console& htop::background_red(const wchar_t* str)
+htop::console& htop::background_red()
 {
 	htop::console::SetColor(None, Red);
 	return htop::console();

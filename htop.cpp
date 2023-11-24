@@ -3,6 +3,7 @@
 #include <vector>
 #include <string>
 #include <tlhelp32.h>
+#include "utils"
 #include "console.h"
 
 void color_test()
@@ -10,34 +11,6 @@ void color_test()
 	htop::cout << htop::red << L"a" << htop::blue << L"LOOOOH" << htop::green << L"   aAAAAAAAAAAASDLKSL:DKL:KL:k" << htop::endl;
 	htop::cout << htop::red << L"a" << htop::lblue << L"LOOOOH" << htop::lgreen << L"   aAAAAAAAAAAASDLKSL:DKL:KL:k" << htop::endl;
 	htop::cout << htop::red << L"a" << htop::mgent << L"LOOOOH" << htop::lmgent << L"   aAAAAAAAAAAASDLKSL:DKL:KL:k" << htop::endl;
-}
-
-struct Process
-{
-    PROCESSENTRY32W base;
-};
-
-std::vector<Process> getProcessInfos() {
-    std::vector<Process> result{};
-
-    PROCESSENTRY32W pe32;
-    auto hProcessSnap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
-
-    if (hProcessSnap == INVALID_HANDLE_VALUE) {
-        return {};
-    }
-
-    pe32.dwSize = sizeof(PROCESSENTRY32W);
-
-    if (!Process32FirstW(hProcessSnap, &pe32)) {
-        return {};
-    }
-
-    while (Process32NextW(hProcessSnap, &pe32)) {
-        result.push_back({ pe32 });
-    }
-    CloseHandle(hProcessSnap);
-    return result;
 }
 
 void calculateCpusLoad()
@@ -93,6 +66,7 @@ int main(int argc, const char* argv[])
 
     while (true)
     {
+        htop::cout << htop::start;
         {
             std::wstring cpu{};
             GetSystemInfo(&info);
@@ -113,10 +87,9 @@ int main(int argc, const char* argv[])
             htop::cout << htop::lblue << L"  Mem" << htop::white << L"[" << htop::lgray << allocated << L"\\" << total << L"M" << htop::white << L"]" << htop::endl;
         }
 
-        htop::cout << htop::start;
         Sleep(500);
     }
-    for (auto& it : getProcessInfos()) {
+    for (auto& it : htop::getProcessInfos()) {
         htop::cout << it.base.szExeFile << htop::endl;
     }
     color_test();

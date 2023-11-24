@@ -14,4 +14,4 @@ project ("htop")
 # Включите подпроекты.
 #add_subdirectory ("htop")
 # Добавьте источник в исполняемый файл этого проекта.
-add_executable (htop "htop.cpp" "console.cpp" "console.h")
+add_executable (htop WIN32 "htop.cpp" "console.cpp" "console.h" "utils.h" "utils.cpp")
