@@ -37,7 +37,7 @@ namespace htop {
             else {
                 int prec = 2;
                 float res = sz;
-                if (sz >= 10000) prec--, res /= 1024;
+                if (sz >= 1024) prec--, res /= 1024;
                 result << std::fixed << std::setprecision(prec) << res << arr[i];
                 break;
             }

@@ -28,8 +28,10 @@ namespace htop {
 		~console();
 		void clear() const;
 		static void SetColor(ConsoleColor text, ConsoleColor background);
+		static void write(const wchar_t* str);
 		static void write(const wchar_t* str, size_t sz);
 		static void setPosition(COORD pos);
+		static void cls();
 	};
 
 	console& operator <<(console& estr, const wchar_t* str);
@@ -51,6 +53,7 @@ namespace htop {
 	htop::console& background_red(console& estr);
 	htop::console& background_lblue(console& estr);
 	htop::console& background_black(console& estr);
+	htop::console& background_green(console& estr);
 
 	static htop::console cout;
 }

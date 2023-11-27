@@ -4,6 +4,7 @@
 #include <string>
 #include <thread>
 #include <atomic>
+#include <condition_variable>
 #include <tlhelp32.h>
 #include "utils.h"
 #include "console.h"
@@ -58,28 +59,65 @@ void calculateCpusLoad()
     }
 }
 
+enum Status {
+    KILL, 
+    SKIP,
+    NONE
+};
+
 class Window {
     HANDLE hStdOut;
+    std::mutex mut;
     std::atomic<int> panelSize = 60;
-    std::atomic<bool> executed{ true };
-    std::atomic<CONSOLE_SCREEN_BUFFER_INFO> consoleInfo;
+    std::atomic<Status> status{ NONE };
+    std::condition_variable cv;
+    CONSOLE_SCREEN_BUFFER_INFO window;
     std::wstring panel;
     std::wstring emtyPanel;
-    std::jthread keysChecker;
+    std::jthread commandChecker;
+    std::jthread processChecker;
+    std::vector<htop::Process> procs;
 
-    void checker()
+    void commsChecker()
     {
         while (true) {
             CONSOLE_SCREEN_BUFFER_INFO info;
-            if (GetConsoleScreenBufferInfo(hStdOut,&info)) {
+            if (GetConsoleScreenBufferInfo(hStdOut, &info)) {
+                if (info.srWindow.Right - info.srWindow.Left != width() ||
+                    info.srWindow.Bottom - info.srWindow.Top != height()) {
+                    status.store(NONE);
+                    std::unique_lock lock(mut);
+                    window.srWindow = info.srWindow;
+                    // clear space
+                    htop::cout.clear();
+                    htop::cout.cls();
+                    status.store(SKIP);
+                    cv.notify_one();
+                }
                 //if (consoleInfo.srWindow.Right > 120) panelSize = 60;
             }
+
             if (GetAsyncKeyState(VK_F10)) {
-                executed.store(false);
+                status.store(KILL);
+                cv.notify_one();
                 return;
             }
-            consoleInfo.store(info);
-            Sleep(50);
+
+            Sleep(10);
+        }
+    }
+
+    void procsChecker()
+    {      
+        while (status.load() != KILL) {
+            status.store(NONE);
+            std::unique_lock lock(mut);
+            htop::getProcessInfos(procs);
+            
+            status.store(SKIP);
+            cv.notify_one();
+            lock.unlock();
+            Sleep(1000);
         }
     }
 
@@ -88,58 +126,108 @@ public:
         panel.resize(120, L'|');
         emtyPanel.resize(110, L' ');
         hStdOut = GetStdHandle(STD_OUTPUT_HANDLE);
-        keysChecker = std::jthread(&Window::checker, this);
+        commandChecker = std::jthread(&Window::commsChecker, this);
+        processChecker = std::jthread(&Window::procsChecker, this);
     }
     int show() {
         int ret{ 0 };
         SYSTEM_INFO info;
         GetSystemInfo(&info);
 
-        while (executed.load())
+        while (status.load() != KILL)
         {
-            htop::cout.setPosition({ 0, 1 });
             {
-                std::wstring cpu{};
-
-                for (int i = 0; i < info.dwNumberOfProcessors; i++) {
-                    htop::cout << htop::blue << L"  CPU" << htop::white << L"[" << htop::lgray << L"%" << htop::white << L"]" << htop::endl;
+                std::unique_lock lock(mut);
+                Status kill;
+                cv.wait(lock, [&] {
+                    kill = status.load();
+                    return (kill == KILL || kill == SKIP);
+                    });
+                if (kill == KILL) {
+                    break;
                 }
-            }
-
-            // mem info
-            {
-                auto memInfo = htop::getMemInfo();
-                htop::cout << htop::blue << L"  Mem" << htop::white << L"[" << htop::lgreen;
-                int szPanel = panelSize - memInfo.size();
-                szPanel = min(szPanel, panelSize * htop::getMemLoad() / 100);
-                htop::cout.write(panel.c_str(), szPanel);
-                htop::cout.write(emtyPanel.c_str(), panelSize - szPanel);
-                htop::cout << htop::lgray << memInfo << htop::white << L"]" << htop::endl;
-            }
-
-            // info panel
-            {
-                auto cInfo = consoleInfo.load();
-                SHORT p = cInfo.srWindow.Bottom - 1;
-                htop::cout.setPosition({ 0, p });
-                htop::cout << htop::white << htop::background_black << L"F1" << htop::black << htop::background_lblue << L"Quit  ";
-                htop::cout << htop::white << htop::background_black << L"F2" << htop::black << htop::background_lblue << L"Quit  ";
-                htop::cout << htop::white << htop::background_black << L"F3" << htop::black << htop::background_lblue << L"Quit  ";
-                htop::cout << htop::white << htop::background_black << L"F4" << htop::black << htop::background_lblue << L"Quit  ";
-                htop::cout << htop::white << htop::background_black << L"F5" << htop::black << htop::background_lblue << L"Quit  ";
-                htop::cout << htop::white << htop::background_black << L"F6" << htop::black << htop::background_lblue << L"Quit  ";
-                htop::cout << htop::white << htop::background_black << L"F7" << htop::black << htop::background_lblue << L"Quit  ";
-                htop::cout << htop::white << htop::background_black << L"F8" << htop::black << htop::background_lblue << L"Quit  ";
-                htop::cout << htop::white << htop::background_black << L"F9" << htop::black << htop::background_lblue << L"Quit  ";
-                htop::cout << htop::white << htop::background_black << L"F10" << htop::black << htop::background_lblue << L"Quit";
-                htop::cout.write(emtyPanel.c_str(), min(emtyPanel.length(), (cInfo.srWindow.Right - 100) * 2));
+                // windowSize
+                auto srWindow = window;
+                int szPanel = srWindow.srWindow.Top + 1;
+                htop::cout.setPosition({ srWindow.srWindow.Left, SHORT(szPanel) });
                 htop::cout.clear();
-            }
 
-            Sleep(500);
+                {
+                    std::wstring cpu{};
+
+                    for (int i = 0; i < info.dwNumberOfProcessors / info.dwNumberOfProcessors; i++) {
+                        htop::cout << htop::blue << L"  CPU" << htop::white << L"[" << htop::lgray << L"%" << htop::white << L"]" << htop::endl;
+                        szPanel++;
+                    }
+                }
+
+                if (status.load() == NONE) {
+
+                    continue;
+                }
+
+                printMemInfo();
+                szPanel++;
+                htop::cout << htop::background_green << htop::black << L"    PID" << L" USER    " << L" NAME";
+                htop::cout.write(emtyPanel.c_str(), min(min(emtyPanel.size(), width()), USHORT(width() - 21)));
+                htop::cout << htop::endl;
+                //+1 bcause printCommandPanel
+                printProcesses(szPanel + 1);
+
+                if (status.load() == NONE) {
+
+                    continue;
+                }
+                printCommandPanel();
+            }
+            status.store(NONE);
         }
 
+        htop::cout.clear();
+        htop::cout.cls();
         return ret;
+    }
+
+private:
+    void printMemInfo() {
+        auto memInfo = htop::getMemInfo();
+        htop::cout << htop::blue << L"  Mem" << htop::white << L"[" << htop::lgreen;
+        int szPanel = panelSize - memInfo.size();
+        szPanel = min(szPanel, panelSize * htop::getMemLoad() / 100);
+        htop::cout.write(panel.c_str(), szPanel);
+        htop::cout.write(emtyPanel.c_str(), panelSize - szPanel);
+        htop::cout << htop::lgray << memInfo << htop::white << L"]" << htop::endl;
+    }
+    void printCommandPanel() {
+        htop::cout.setPosition({ window.srWindow.Left, SHORT(window.srWindow.Bottom)});
+        htop::cout << htop::white << htop::background_black << L"F1" << htop::black << htop::background_lblue << L"Quit  ";
+        htop::cout << htop::white << htop::background_black << L"F2" << htop::black << htop::background_lblue << L"Quit  ";
+        htop::cout << htop::white << htop::background_black << L"F3" << htop::black << htop::background_lblue << L"Quit  ";
+        htop::cout << htop::white << htop::background_black << L"F4" << htop::black << htop::background_lblue << L"Quit  ";
+        htop::cout << htop::white << htop::background_black << L"F5" << htop::black << htop::background_lblue << L"Quit  ";
+        htop::cout << htop::white << htop::background_black << L"F6" << htop::black << htop::background_lblue << L"Quit  ";
+        htop::cout << htop::white << htop::background_black << L"F7" << htop::black << htop::background_lblue << L"Quit  ";
+        htop::cout << htop::white << htop::background_black << L"F8" << htop::black << htop::background_lblue << L"Quit  ";
+        htop::cout << htop::white << htop::background_black << L"F9" << htop::black << htop::background_lblue << L"Quit  ";
+        htop::cout << htop::white << htop::background_black << L"F10" << htop::black << htop::background_lblue << L"Quit";
+        htop::cout.write(emtyPanel.c_str(), min(min(emtyPanel.size(), width()), USHORT(width() - 79)));
+        htop::cout.clear();
+    }
+    void printProcesses(int szPanel) {
+        int i = 0;
+        htop::cout.clear();
+        for (auto& it : procs) {
+            if (++i == height() - szPanel) break;
+            htop::cout << std::to_wstring(it.base.th32ProcessID) << htop::endl;
+        }
+    }
+
+    SHORT width() const noexcept {
+        return window.srWindow.Right - window.srWindow.Left;
+    }
+
+    SHORT height() const noexcept {
+        return window.srWindow.Bottom - window.srWindow.Top;
     }
 };
 
