@@ -1,6 +1,7 @@
 #include <Windows.h>
 #include <iostream>
 #include <vector>
+#include <format>
 #include <string>
 #include <thread>
 #include <atomic>
@@ -69,11 +70,10 @@ class Window {
     HANDLE hStdOut;
     std::mutex mut;
     std::atomic<int> panelSize = 60;
+    std::atomic<int> processPosition;
     std::atomic<Status> status{ NONE };
     std::condition_variable cv;
     CONSOLE_SCREEN_BUFFER_INFO window;
-    std::wstring panel;
-    std::wstring emtyPanel;
     std::jthread commandChecker;
     std::jthread processChecker;
     std::vector<htop::Process> procs;
@@ -83,21 +83,32 @@ class Window {
         while (true) {
             CONSOLE_SCREEN_BUFFER_INFO info;
             if (GetConsoleScreenBufferInfo(hStdOut, &info)) {
-                if (info.srWindow.Right - info.srWindow.Left != width() ||
-                    info.srWindow.Bottom - info.srWindow.Top != height()) {
+                if (htop::cout.width(window.srWindow) != htop::cout.width() ||
+                    htop::cout.height(window.srWindow) != htop::cout.height()) {
                     status.store(NONE);
                     std::unique_lock lock(mut);
                     window.srWindow = info.srWindow;
-                    // clear space
-                    htop::cout.clear();
-                    htop::cout.cls();
                     status.store(SKIP);
+                    htop::cout.cls();
                     cv.notify_one();
                 }
                 //if (consoleInfo.srWindow.Right > 120) panelSize = 60;
             }
 
-            if (GetAsyncKeyState(VK_F10)) {
+            if (GetAsyncKeyState(VK_UP) && 
+                processPosition.load() != 0) {
+
+                processPosition.fetch_sub(1);
+                status.store(SKIP);
+                cv.notify_one();
+            }
+            else if (GetAsyncKeyState(VK_DOWN) && 
+                getProcsPanelSize() * processPosition.load() < procs.size()) {
+
+                processPosition.fetch_add(1);
+                status.store(SKIP);
+                cv.notify_one();
+            } else if (GetAsyncKeyState(VK_F10)) {
                 status.store(KILL);
                 cv.notify_one();
                 return;
@@ -123,8 +134,6 @@ class Window {
 
 public:
     Window() {
-        panel.resize(120, L'|');
-        emtyPanel.resize(110, L' ');
         hStdOut = GetStdHandle(STD_OUTPUT_HANDLE);
         commandChecker = std::jthread(&Window::commsChecker, this);
         processChecker = std::jthread(&Window::procsChecker, this);
@@ -146,18 +155,14 @@ public:
                 if (kill == KILL) {
                     break;
                 }
-                // windowSize
-                auto srWindow = window;
-                int szPanel = srWindow.srWindow.Top + 1;
-                htop::cout.setPosition({ srWindow.srWindow.Left, SHORT(szPanel) });
-                htop::cout.clear();
+
+                htop::cout.setPosition({ window.srWindow.Left, SHORT(window.srWindow.Top + 1) });
 
                 {
                     std::wstring cpu{};
 
                     for (int i = 0; i < info.dwNumberOfProcessors / info.dwNumberOfProcessors; i++) {
                         htop::cout << htop::blue << L"  CPU" << htop::white << L"[" << htop::lgray << L"%" << htop::white << L"]" << htop::endl;
-                        szPanel++;
                     }
                 }
 
@@ -167,12 +172,8 @@ public:
                 }
 
                 printMemInfo();
-                szPanel++;
-                htop::cout << htop::background_green << htop::black << L"    PID" << L" USER    " << L" NAME";
-                htop::cout.write(emtyPanel.c_str(), min(min(emtyPanel.size(), width()), USHORT(width() - 21)));
-                htop::cout << htop::endl;
                 //+1 bcause printCommandPanel
-                printProcesses(szPanel + 1);
+                printProcesses();
 
                 if (status.load() == NONE) {
 
@@ -194,8 +195,8 @@ private:
         htop::cout << htop::blue << L"  Mem" << htop::white << L"[" << htop::lgreen;
         int szPanel = panelSize - memInfo.size();
         szPanel = min(szPanel, panelSize * htop::getMemLoad() / 100);
-        htop::cout.write(panel.c_str(), szPanel);
-        htop::cout.write(emtyPanel.c_str(), panelSize - szPanel);
+        htop::cout.fill(szPanel, L'|');
+        htop::cout.fill(panelSize - szPanel, L' ');
         htop::cout << htop::lgray << memInfo << htop::white << L"]" << htop::endl;
     }
     void printCommandPanel() {
@@ -210,24 +211,31 @@ private:
         htop::cout << htop::white << htop::background_black << L"F8" << htop::black << htop::background_lblue << L"Quit  ";
         htop::cout << htop::white << htop::background_black << L"F9" << htop::black << htop::background_lblue << L"Quit  ";
         htop::cout << htop::white << htop::background_black << L"F10" << htop::black << htop::background_lblue << L"Quit";
-        htop::cout.write(emtyPanel.c_str(), min(min(emtyPanel.size(), width()), USHORT(width() - 79)));
+        htop::cout.fillLine(L' ');
+        //htop::cout.write(emtyPanel.c_str(), min(min(emtyPanel.size(), width()), USHORT(width() - 79)));
         htop::cout.clear();
     }
-    void printProcesses(int szPanel) {
-        int i = 0;
+    void printProcesses() {
+        htop::cout << htop::background_green << htop::black << L"    PID" << L" USER    " << L" NAME";
+        htop::cout.fillLine(L' ');
+        htop::cout << htop::endl;
         htop::cout.clear();
-        for (auto& it : procs) {
-            if (++i == height() - szPanel) break;
-            htop::cout << std::to_wstring(it.base.th32ProcessID) << htop::endl;
+
+        int sz = getProcsPanelSize();
+
+        auto pos = htop::cout.getPosition();
+        int step = processPosition.load() * sz;
+
+        for (int i = step; i < procs.size() && i < step + sz; i++) {
+            std::wcout << std::format(L"{:7} {:<15}{:<50}",
+                procs[i].base.th32ProcessID,
+                procs[i].username,
+                procs[i].base.szExeFile) << std::endl;
         }
     }
 
-    SHORT width() const noexcept {
-        return window.srWindow.Right - window.srWindow.Left;
-    }
-
-    SHORT height() const noexcept {
-        return window.srWindow.Bottom - window.srWindow.Top;
+    int getProcsPanelSize() const noexcept {
+        return htop::cout.height() - (htop::cout.getConsoleInfo().dwCursorPosition.Y - htop::cout.getConsoleInfo().srWindow.Top);
     }
 };
 

@@ -30,8 +30,32 @@ namespace htop {
 		static void SetColor(ConsoleColor text, ConsoleColor background);
 		static void write(const wchar_t* str);
 		static void write(const wchar_t* str, size_t sz);
+		static void fill(COORD pos, size_t len, wchar_t fill);
+		static void fill(size_t len, wchar_t fill);
+		static void fillLine(wchar_t fill);
 		static void setPosition(COORD pos);
+		static void addYPosition(int len);
+		static COORD getPosition();
+		static CONSOLE_SCREEN_BUFFER_INFO getConsoleInfo();
 		static void cls();
+
+		static SHORT width() {
+			auto window = getConsoleInfo();
+			return width(window.srWindow);
+		}
+
+		static SHORT height() {
+			auto window = getConsoleInfo();
+			return height(window.srWindow);
+		}
+
+		static SHORT width(SMALL_RECT srWindow) {
+			return srWindow.Right - srWindow.Left;
+		}
+
+		static SHORT height(SMALL_RECT srWindow) {
+			return srWindow.Bottom - srWindow.Top;
+		}
 	};
 
 	console& operator <<(console& estr, const wchar_t* str);

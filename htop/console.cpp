@@ -1,6 +1,9 @@
 #include <Windows.h>
 #include "console.h"
 
+HANDLE hIConsole = GetStdHandle(STD_INPUT_HANDLE);
+HANDLE hOConsole = GetStdHandle(STD_OUTPUT_HANDLE);
+
 htop::console::~console()
 {
 	//if (final) clear();
@@ -14,16 +17,15 @@ void htop::console::clear() const
 void htop::console::SetColor(ConsoleColor text, ConsoleColor background)
 {
 	CONSOLE_SCREEN_BUFFER_INFO info;
-	HANDLE hStdOut = GetStdHandle(STD_OUTPUT_HANDLE);
 
 	if (text == None || background == None) {
-		if (GetConsoleScreenBufferInfo(hStdOut, &info)) {
+		if (GetConsoleScreenBufferInfo(hOConsole, &info)) {
 			if (text == None) text = htop::ConsoleColor(info.wAttributes & 0xf);
 			if (background == None) background = htop::ConsoleColor(info.wAttributes >> 4);
 		} else {}
 	}
 
-	SetConsoleTextAttribute(hStdOut, (WORD)((background << 4) | text));
+	SetConsoleTextAttribute(hOConsole, (WORD)((background << 4) | text));
 }
 
 void htop::console::cls()
@@ -32,10 +34,9 @@ void htop::console::cls()
 	SMALL_RECT scrollRect;
 	COORD scrollTarget;
 	CHAR_INFO fill;
-	HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
 
 	// Get the number of character cells in the current buffer.
-	if (!GetConsoleScreenBufferInfo(hConsole, &csbi))
+	if (!GetConsoleScreenBufferInfo(hOConsole, &csbi))
 	{
 		return;
 	}
@@ -55,13 +56,13 @@ void htop::console::cls()
 	fill.Attributes = csbi.wAttributes;
 
 	// Do the scroll
-	ScrollConsoleScreenBufferW(hConsole, &scrollRect, NULL, scrollTarget, &fill);
+	ScrollConsoleScreenBufferW(hOConsole, &scrollRect, NULL, scrollTarget, &fill);
 
 	// Move the cursor to the top left corner too.
 	csbi.dwCursorPosition.X = 0;
 	csbi.dwCursorPosition.Y = 0;
 
-	SetConsoleCursorPosition(hConsole, csbi.dwCursorPosition);
+	SetConsoleCursorPosition(hOConsole, csbi.dwCursorPosition);
 }
 
 void htop::console::write(const wchar_t* str)
@@ -72,14 +73,52 @@ void htop::console::write(const wchar_t* str)
 void htop::console::write(const wchar_t* str, size_t sz)
 {
 	DWORD dwWrited{ 0 };
-	HANDLE hStdOut = GetStdHandle(STD_OUTPUT_HANDLE);
-	WriteConsoleW(hStdOut, str, sz, &dwWrited, NULL);
+	WriteConsoleW(hOConsole, str, sz, &dwWrited, NULL);
+}
+
+void htop::console::fill(COORD pos, size_t len, wchar_t fill)
+{
+	DWORD dwWrited{ 0 };
+	FillConsoleOutputCharacterW(hOConsole, fill, len, pos, &dwWrited);
+	FillConsoleOutputAttribute(hOConsole, getConsoleInfo().wAttributes, len, pos, &dwWrited);
+	setPosition({ SHORT(pos.X + len), pos.Y });
+}
+
+void htop::console::fill(size_t len, wchar_t c)
+{
+	fill(getPosition(), len, c);
+}
+
+void htop::console::fillLine(wchar_t c)
+{
+	auto info = getConsoleInfo();
+	fill(info.dwCursorPosition, width() - info.dwCursorPosition.X, c);
 }
 
 void htop::console::setPosition(COORD pos)
 {
-	HANDLE hStdOut = GetStdHandle(STD_OUTPUT_HANDLE);
-	SetConsoleCursorPosition(hStdOut, pos);
+	SetConsoleCursorPosition(hOConsole, pos);
+}
+
+void htop::console::addYPosition(int len)
+{
+	auto pos = getPosition();
+	setPosition({ pos.X, SHORT(pos.Y + len) });
+}
+
+COORD htop::console::getPosition()
+{
+	return getConsoleInfo().dwCursorPosition;
+}
+
+CONSOLE_SCREEN_BUFFER_INFO htop::console::getConsoleInfo()
+{
+	CONSOLE_SCREEN_BUFFER_INFO csbi;
+
+	if (!GetConsoleScreenBufferInfo(hOConsole, &csbi)) {
+		memset(&csbi, 0, sizeof csbi);
+	}
+	return csbi;
 }
 
 htop::console& htop::operator<<(htop::console& estr, const wchar_t* str)
