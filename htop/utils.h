@@ -7,13 +7,14 @@ namespace htop {
     struct Process
     {
         PROCESSENTRY32W base;
-        WCHAR username[UNLEN];
-        HANDLE handle;
+        std::wstring username;
+        HANDLE handle{ nullptr };
 
-        size_t allocated;
+        size_t allocated{ 0 };
     };
 
     void getProcessInfos(std::vector<Process>& result);
+    std::wstring getConvertedMem(size_t sz);
     std::wstring getMemInfo();
     int getMemLoad();
 }

@@ -27,7 +27,6 @@ namespace htop {
             Process proc;
             proc.base = pe32;
             proc.handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pe32.th32ProcessID);
-            *proc.username = 0;
 
             if (proc.handle) {
                 PROCESS_MEMORY_COUNTERS ProcMemCounters;
@@ -46,12 +45,14 @@ namespace htop {
                         if (GetTokenInformation(ProcessTokenHandle, TokenUser, TokenUserStruct, ReturnLength, &ReturnLength)) {
                             SID_NAME_USE NameUse;
                             DWORD NameLength = UNLEN;
+                            WCHAR username[UNLEN];
                             TCHAR DomainName[MAX_PATH];
                             DWORD DomainLength = MAX_PATH;
 
-                            LookupAccountSidW(0, TokenUserStruct->User.Sid, proc.username, &NameLength, DomainName, &DomainLength, &NameUse);
+                            LookupAccountSidW(0, TokenUserStruct->User.Sid, username, &NameLength, DomainName, &DomainLength, &NameUse);
 
-                            proc.username[NameLength] = 0;
+                            username[NameLength] = 0;
+                            proc.username = username;
                         }
                     }
                     CloseHandle(ProcessTokenHandle);
@@ -64,7 +65,7 @@ namespace htop {
         CloseHandle(hProcessSnap);
     }
 
-    inline std::wstring getConvertedMem(size_t sz) {
+    std::wstring getConvertedMem(size_t sz) {
         std::wstringstream result{};
         static const wchar_t* arr[] = { L"K", L"M", L"G" };
 

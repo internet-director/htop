@@ -96,15 +96,19 @@ class Window {
             }
 
             if (GetAsyncKeyState(VK_UP) && 
-                processPosition.load() != 0) {
-
+                processPosition.load() != 0) 
+            {
+                status.store(NONE);
+                std::unique_lock lock(mut);
                 processPosition.fetch_sub(1);
                 status.store(SKIP);
                 cv.notify_one();
             }
             else if (GetAsyncKeyState(VK_DOWN) && 
-                getProcsPanelSize() * processPosition.load() < procs.size()) {
-
+                getProcsPanelSize() * processPosition.load() < procs.size()) 
+            {
+                status.store(NONE);
+                std::unique_lock lock(mut);
                 processPosition.fetch_add(1);
                 status.store(SKIP);
                 cv.notify_one();
@@ -124,6 +128,10 @@ class Window {
             status.store(NONE);
             std::unique_lock lock(mut);
             htop::getProcessInfos(procs);
+
+            if (procs.size() <= processPosition.load()) {
+
+            }
             
             status.store(SKIP);
             cv.notify_one();
@@ -172,7 +180,6 @@ public:
                 }
 
                 printMemInfo();
-                //+1 bcause printCommandPanel
                 printProcesses();
 
                 if (status.load() == NONE) {
@@ -200,7 +207,7 @@ private:
         htop::cout << htop::lgray << memInfo << htop::white << L"]" << htop::endl;
     }
     void printCommandPanel() {
-        htop::cout.setPosition({ window.srWindow.Left, SHORT(window.srWindow.Bottom)});
+        //htop::cout.setPosition({ window.srWindow.Left, SHORT(window.srWindow.Bottom)});
         htop::cout << htop::white << htop::background_black << L"F1" << htop::black << htop::background_lblue << L"Quit  ";
         htop::cout << htop::white << htop::background_black << L"F2" << htop::black << htop::background_lblue << L"Quit  ";
         htop::cout << htop::white << htop::background_black << L"F3" << htop::black << htop::background_lblue << L"Quit  ";
@@ -212,11 +219,15 @@ private:
         htop::cout << htop::white << htop::background_black << L"F9" << htop::black << htop::background_lblue << L"Quit  ";
         htop::cout << htop::white << htop::background_black << L"F10" << htop::black << htop::background_lblue << L"Quit";
         htop::cout.fillLine(L' ');
-        //htop::cout.write(emtyPanel.c_str(), min(min(emtyPanel.size(), width()), USHORT(width() - 79)));
         htop::cout.clear();
     }
     void printProcesses() {
-        htop::cout << htop::background_green << htop::black << L"    PID" << L" USER    " << L" NAME";
+        htop::cout << htop::background_green << htop::black << 
+            std::format(L"{:>7} {:<20}{:7}{:7}", 
+                L"PID", 
+                L"USER", 
+                L"MEM", 
+                L"NAME");
         htop::cout.fillLine(L' ');
         htop::cout << htop::endl;
         htop::cout.clear();
@@ -227,10 +238,11 @@ private:
         int step = processPosition.load() * sz;
 
         for (int i = step; i < procs.size() && i < step + sz; i++) {
-            std::wcout << std::format(L"{:7} {:<15}{:<50}",
+            htop::cout << std::format(L"{:7} {:<20}{:7}{:<50}",
                 procs[i].base.th32ProcessID,
-                procs[i].username,
-                procs[i].base.szExeFile) << std::endl;
+                (procs[i].username.size() < 20) ? procs[i].username : procs[i].username.substr(0, 20) + L">",
+                htop::getConvertedMem(procs[i].allocated),
+                procs[i].base.szExeFile) << htop::endl;
         }
     }
 
