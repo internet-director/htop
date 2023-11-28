@@ -26,7 +26,7 @@ namespace htop {
         while (Process32NextW(hProcessSnap, &pe32)) {
             Process proc;
             proc.base = pe32;
-            proc.handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pe32.th32ProcessID);
+            proc.handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_VM_READ, FALSE, pe32.th32ProcessID);
 
             if (proc.handle) {
                 PROCESS_MEMORY_COUNTERS ProcMemCounters;
@@ -57,8 +57,15 @@ namespace htop {
                     }
                     CloseHandle(ProcessTokenHandle);
                 }
+                else {
+                    proc.username = L"<unable to open token>";
+                }
+
                 CloseHandle(proc.handle);
                 proc.handle = nullptr;
+            }
+            else {
+                proc.username = L"<access denied>";
             }
             result.emplace_back(std::move(proc));
         }

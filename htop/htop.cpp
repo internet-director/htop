@@ -69,7 +69,6 @@ enum Status {
 class Window {
     HANDLE hStdOut;
     std::mutex mut;
-    std::atomic<int> panelSize = 60;
     std::atomic<int> processPosition;
     std::atomic<Status> status{ NONE };
     std::condition_variable cv;
@@ -89,7 +88,7 @@ class Window {
                     std::unique_lock lock(mut);
                     window.srWindow = info.srWindow;
                     status.store(SKIP);
-                    htop::cout.cls();
+                    //htop::cout.cls();
                     cv.notify_one();
                 }
                 //if (consoleInfo.srWindow.Right > 120) panelSize = 60;
@@ -164,7 +163,8 @@ public:
                     break;
                 }
 
-                htop::cout.setPosition({ window.srWindow.Left, SHORT(window.srWindow.Top + 1) });
+                htop::cout.setPosition({ window.srWindow.Left, window.srWindow.Top });
+                htop::cout << htop::endl;
 
                 {
                     std::wstring cpu{};
@@ -200,10 +200,11 @@ private:
     void printMemInfo() {
         auto memInfo = htop::getMemInfo();
         htop::cout << htop::blue << L"  Mem" << htop::white << L"[" << htop::lgreen;
-        int szPanel = panelSize - memInfo.size();
-        szPanel = min(szPanel, panelSize * htop::getMemLoad() / 100);
+        int sz = htop::cout.width() / 2;
+        int szPanel = sz - memInfo.size();
+        szPanel = min(szPanel, sz * htop::getMemLoad() / 100);
         htop::cout.fill(szPanel, L'|');
-        htop::cout.fill(panelSize - szPanel, L' ');
+        htop::cout.fill(sz - szPanel, L' ');
         htop::cout << htop::lgray << memInfo << htop::white << L"]" << htop::endl;
     }
     void printCommandPanel() {
@@ -227,9 +228,8 @@ private:
                 L"PID", 
                 L"USER", 
                 L"MEM", 
-                L"NAME");
-        htop::cout.fillLine(L' ');
-        htop::cout << htop::endl;
+                L"NAME") 
+            << htop::endl;
         htop::cout.clear();
 
         int sz = getProcsPanelSize();

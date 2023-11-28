@@ -140,7 +140,10 @@ htop::console& htop::operator<<(htop::console& estr, htop::console& (*color)(con
 
 htop::console& htop::endl(console& estr)
 {
-	estr << L"\r\n";
+	htop::console::fillLine(L' ');
+	auto pos = htop::console::getPosition();
+	htop::console::setPosition({ 0, SHORT(pos.Y + 1) });
+	//estr << L"\n";
 	return estr;
 }
 
