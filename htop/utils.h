@@ -4,6 +4,8 @@
 #include <Windows.h>
 
 namespace htop {
+    struct Window;
+
     struct Process
     {
         PROCESSENTRY32W base;

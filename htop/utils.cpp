@@ -20,6 +20,7 @@ namespace htop {
         pe32.dwSize = sizeof(PROCESSENTRY32W);
 
         if (!Process32FirstW(hProcessSnap, &pe32)) {
+            CloseHandle(hProcessSnap);
             return;
         }
 
@@ -54,6 +55,7 @@ namespace htop {
                             username[NameLength] = 0;
                             proc.username = username;
                         }
+                        delete[] TokenUserStruct;
                     }
                     CloseHandle(ProcessTokenHandle);
                 }
