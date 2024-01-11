@@ -1,6 +1,5 @@
 #include <Windows.h>
 
-
 #ifdef _DEBUG
 int main()
 #else
